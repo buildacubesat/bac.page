@@ -1,0 +1,13 @@
+[project]
+name = "bac.page"
+version = "0.1.0"
+description = "bac.page URL shortener CLI"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+bac = "bac_page:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
