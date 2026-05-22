@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>bac.page</title>
+  <meta http-equiv="refresh" content="2; url=https://buildacubesat.space">
+  <title>bac.page – redirecting…</title>
   <style>
     body {
       font-family: sans-serif;
@@ -13,12 +14,29 @@
       color: #1a1a1a;
     }
     a { color: #4277FD; }
+    .notice {
+      border: 2px solid #F7D400;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+      background: #fffbe6;
+    }
+    .notice p { margin: 0.4rem 0; }
   </style>
 </head>
 <body>
+
   <h1>Nothing to see here.</h1>
+  
+  <div class="notice">
+    <p><strong>This is just a URL shortener, nothing to see here.</strong> You are being redirected to
+    <a href="https://buildacubesat.space">buildacubesat.space</a> in a moment.</p>
+    <p>Not redirected automatically?
+    <a href="https://buildacubesat.space">Click here.</a></p>
+  </div>
+  
   <p>
-    This is a URL forwarding service for
+    This URL forwarding service is part of
     <a href="https://buildacubesat.space">Build a CubeSat</a>,
     an open-source electronics project for accessible space hardware.
   </p>
@@ -34,6 +52,8 @@
     does not offer financial, banking, or insurance services of any kind.
     "bac" as used here refers exclusively to Build a CubeSat.
   </p>
+
+  <script>setTimeout(() => window.location.replace("https://buildacubesat.space"), 2000);</script>
 
 </body>
 </html>
