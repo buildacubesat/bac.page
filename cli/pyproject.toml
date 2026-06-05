@@ -1,11 +1,12 @@
 [project]
 name = "bac.page"
-version = "0.3.0"
+version = "0.3.3"
 description = "bac.page URL shortener CLI"
 requires-python = ">=3.11"
 dependencies = [
     "qrcode[pil]",
     "numpy",
+    "python-dotenv",
 ]
 
 [project.scripts]

@@ -1,15 +1,46 @@
 import argparse
+import os
 import random
 import re
 import string
 import subprocess
 import sys
 from pathlib import Path
+from importlib.metadata import version, PackageNotFoundError
+from dotenv import load_dotenv, set_key
 
 DOMAIN = "bac.page"
-REPO_PATH = Path(__file__).parent.parent
 UID_LENGTH = 8
 SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]{1,12}$")
+ENV_PATH = Path.home() / ".config" / "bac-page" / ".env"
+
+try:
+    VERSION = version("bac.page")
+except PackageNotFoundError:
+    VERSION = "unknown"
+
+
+def get_repo_path() -> Path:
+    load_dotenv(ENV_PATH)
+    repo = os.environ.get("BAC_PAGE_REPO")
+    if not repo:
+        print(
+            "bac-page is not configured. Run `bac-page --init`.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return Path(repo).expanduser().resolve()
+
+
+def init_config() -> None:
+    path_str = input("Repo path: ").strip()
+    repo = Path(path_str).expanduser().resolve()
+    if not (repo / ".git").exists():
+        print(f"Warning: {repo} does not appear to be a git repository.", file=sys.stderr)
+    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ENV_PATH.touch()
+    set_key(str(ENV_PATH), "BAC_PAGE_REPO", str(repo))
+    print(f"Config saved to {ENV_PATH}")
 
 
 def generate_uid() -> str:
@@ -34,12 +65,12 @@ def redirect_html(target: str) -> str:
 """
 
 
-def slug_exists(slug: str) -> bool:
-    return (REPO_PATH / slug / "index.html").exists()
+def slug_exists(repo_path: Path, slug: str) -> bool:
+    return (repo_path / slug / "index.html").exists()
 
 
-def create_redirect(slug: str, target: str) -> None:
-    slug_dir = REPO_PATH / slug
+def create_redirect(repo_path: Path, slug: str, target: str) -> None:
+    slug_dir = repo_path / slug
     slug_dir.mkdir(exist_ok=True)
     (slug_dir / "index.html").write_text(redirect_html(target))
 
@@ -50,9 +81,9 @@ def parse_target(index_html: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def list_redirects() -> list[tuple[str, str]]:
+def list_redirects(repo_path: Path) -> list[tuple[str, str]]:
     entries = []
-    for d in sorted(REPO_PATH.iterdir()):
+    for d in sorted(repo_path.iterdir()):
         if not d.is_dir():
             continue
         if d.name.startswith(".") or d.name in ("cli",):
@@ -65,21 +96,23 @@ def list_redirects() -> list[tuple[str, str]]:
     return entries
 
 
-def git_commit_push(slug: str, target: str) -> None:
-    subprocess.run(["git", "add", str(REPO_PATH / slug)], cwd=REPO_PATH, check=True)
+def git_commit_push(repo_path: Path, slug: str, target: str) -> None:
+    subprocess.run(["git", "add", str(repo_path / slug)], cwd=repo_path, check=True)
     subprocess.run(
         ["git", "commit", "-m", f"add redirect: /{slug} → {target}"],
-        cwd=REPO_PATH,
+        cwd=repo_path,
         check=True,
     )
-    subprocess.run(["git", "push"], cwd=REPO_PATH, check=True)
+    subprocess.run(["git", "pull", "--rebase"], cwd=repo_path, check=True)
+    subprocess.run(["git", "push"], cwd=repo_path, check=True)
 
 
-def git_commit_push_edit(message: str, *paths: Path) -> None:
+def git_commit_push_edit(repo_path: Path, message: str, *paths: Path) -> None:
     for p in paths:
-        subprocess.run(["git", "add", str(p)], cwd=REPO_PATH, check=True)
-    subprocess.run(["git", "commit", "-m", message], cwd=REPO_PATH, check=True)
-    subprocess.run(["git", "push"], cwd=REPO_PATH, check=True)
+        subprocess.run(["git", "add", str(p)], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo_path, check=True)
+    subprocess.run(["git", "pull", "--rebase"], cwd=repo_path, check=True)
+    subprocess.run(["git", "push"], cwd=repo_path, check=True)
 
 
 def generate_qr(
@@ -114,13 +147,8 @@ def generate_qr(
         factory = qrcode.image.svg.SvgPathImage
         img = qr.make_image(image_factory=factory)
         svg_data = img.to_string().decode()
-        # Set explicit size
-        svg_data = re.sub(
-            r'(<svg[^>]*)(width="[^"]*")', f'\\1width="{size}"', svg_data
-        )
-        svg_data = re.sub(
-            r'(<svg[^>]*)(height="[^"]*")', f'\\1height="{size}"', svg_data
-        )
+        svg_data = re.sub(r'(<svg[^>]*)(width="[^"]*")', f'\\1width="{size}"', svg_data)
+        svg_data = re.sub(r'(<svg[^>]*)(height="[^"]*")', f'\\1height="{size}"', svg_data)
         if invert:
             svg_data = svg_data.replace('fill="#000000"', 'fill="TEMP"')
             svg_data = svg_data.replace('fill="#ffffff"', 'fill="#000000"')
@@ -169,8 +197,8 @@ def prompt_qr_params() -> dict:
     return {"fmt": fmt, "invert": invert, "alpha": alpha, "ec": ec, "size": size, "output": output}
 
 
-def edit_mode() -> None:
-    redirects = list_redirects()
+def edit_mode(repo_path: Path) -> None:
+    redirects = list_redirects(repo_path)
     if not redirects:
         print("No redirects found.")
         return
@@ -201,14 +229,15 @@ def edit_mode() -> None:
         if not SLUG_PATTERN.match(new_slug):
             print("Error: invalid slug.", file=sys.stderr)
             sys.exit(1)
-        if slug_exists(new_slug):
+        if slug_exists(repo_path, new_slug):
             print(f"Error: /{new_slug} already exists.", file=sys.stderr)
             sys.exit(1)
-        old_path = REPO_PATH / slug
-        new_path = REPO_PATH / new_slug
+        old_path = repo_path / slug
+        new_path = repo_path / new_slug
         old_path.rename(new_path)
-        subprocess.run(["git", "rm", "-r", str(old_path)], cwd=REPO_PATH, check=True)
+        subprocess.run(["git", "rm", "-r", str(old_path)], cwd=repo_path, check=True)
         git_commit_push_edit(
+            repo_path,
             f"rename redirect: /{slug} → /{new_slug}",
             new_path,
         )
@@ -216,10 +245,11 @@ def edit_mode() -> None:
 
     elif action == "2":
         new_target = input(f"New destination URL (current: {target}): ").strip()
-        create_redirect(slug, new_target)
+        create_redirect(repo_path, slug, new_target)
         git_commit_push_edit(
+            repo_path,
             f"update redirect: /{slug} → {new_target}",
-            REPO_PATH / slug,
+            repo_path / slug,
         )
         print(f"https://{DOMAIN}/{slug} now points to {new_target}")
 
@@ -240,7 +270,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Create and manage bac.page short URLs.")
     parser.add_argument("url", nargs="?", help="Target URL to redirect to")
     parser.add_argument("slug", nargs="?", help="Custom slug (1–12 alphanumeric chars)")
+    parser.add_argument("--init", action="store_true", help="Configure the bac.page repo path")
     parser.add_argument("--edit", action="store_true", help="Edit existing redirects")
+    parser.add_argument("--list", "-l", action="store_true", help="List all current redirects")
     parser.add_argument("--qr", action="store_true", help="Generate a QR code for the short URL")
     parser.add_argument("--format", choices=["png", "svg", "webp"], default="svg", dest="fmt", help="QR output format (default: svg)")
     parser.add_argument("--invert", action="store_true", help="White on black QR code")
@@ -248,10 +280,27 @@ def main() -> None:
     parser.add_argument("--ec", choices=["L", "M", "Q", "H"], default="M", help="Error correction level (default: M)")
     parser.add_argument("--size", type=int, default=1000, help="QR code size in pixels (default: 1000)")
     parser.add_argument("--output", type=Path, default=None, help="Output directory for QR code (default: ~)")
+    parser.add_argument("--version", "-v", action="version", version=f"bac-page {VERSION}")
     args = parser.parse_args()
 
+    if args.init:
+        init_config()
+        return
+
+    repo_path = get_repo_path()
+
     if args.edit:
-        edit_mode()
+        edit_mode(repo_path)
+        return
+
+    if args.list:
+        redirects = list_redirects(repo_path)
+        if not redirects:
+            print("No redirects found.")
+            return
+        for slug, target in redirects:
+            print(f"https://{DOMAIN}/{slug}")
+            print(f"  → {target}\n")
         return
 
     if not args.url:
@@ -265,16 +314,16 @@ def main() -> None:
         if not SLUG_PATTERN.match(slug):
             print("Error: slug must be 1–12 alphanumeric characters (hyphens allowed).", file=sys.stderr)
             sys.exit(1)
-        if slug_exists(slug):
+        if slug_exists(repo_path, slug):
             print(f"Error: /{slug} already exists.", file=sys.stderr)
             sys.exit(1)
     else:
         slug = generate_uid()
-        while slug_exists(slug):
+        while slug_exists(repo_path, slug):
             slug = generate_uid()
 
-    create_redirect(slug, target)
-    git_commit_push(slug, target)
+    create_redirect(repo_path, slug, target)
+    git_commit_push(repo_path, slug, target)
 
     short_url = f"https://{DOMAIN}/{slug}"
     print(short_url)
