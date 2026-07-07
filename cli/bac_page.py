@@ -165,15 +165,17 @@ def generate_qr(
         bg = (0, 0, 0) if invert else (255, 255, 255)
 
         if alpha:
-            img = qr.make_image(fill_color=fg, back_color=(0, 0, 0, 0)).convert("RGBA")
-            arr = np.array(img)
+            img_rgb = qr.make_image(fill_color=fg, back_color=bg).convert("RGB")
+            img_rgb = img_rgb.resize((size, size), Image.NEAREST)
+            arr = np.array(img_rgb)
+            rgba = np.zeros((arr.shape[0], arr.shape[1], 4), dtype=np.uint8)
+            rgba[..., :3] = arr
             bg_mask = (arr[:, :, 0] == bg[0]) & (arr[:, :, 1] == bg[1]) & (arr[:, :, 2] == bg[2])
-            arr[bg_mask] = [0, 0, 0, 0]
-            img = Image.fromarray(arr)
+            rgba[..., 3] = np.where(bg_mask, 0, 255)
+            img = Image.fromarray(rgba, "RGBA")
         else:
             img = qr.make_image(fill_color=fg, back_color=bg).convert("RGB")
-
-        img = img.resize((size, size), Image.NEAREST)
+            img = img.resize((size, size), Image.NEAREST)
 
         save_kwargs = {"format": "WEBP"} if fmt == "webp" else {}
         img.save(dest, **save_kwargs)
