@@ -11,7 +11,7 @@ from dotenv import load_dotenv, set_key
 
 DOMAIN = "bac.page"
 UID_LENGTH = 8
-SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]{1,12}$")
+SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]{1,16}$")
 ENV_PATH = Path.home() / ".config" / "bac-page" / ".env"
 
 try:
