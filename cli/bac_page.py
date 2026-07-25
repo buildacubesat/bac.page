@@ -11,7 +11,7 @@ from dotenv import load_dotenv, set_key
 
 DOMAIN = "bac.page"
 UID_LENGTH = 8
-SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]{1,16}$")
+SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]{1,24}$")
 ENV_PATH = Path.home() / ".config" / "bac-page" / ".env"
 
 try:
@@ -271,7 +271,7 @@ def edit_mode(repo_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create and manage bac.page short URLs.")
     parser.add_argument("url", nargs="?", help="Target URL to redirect to")
-    parser.add_argument("slug", nargs="?", help="Custom slug (1–12 alphanumeric chars)")
+    parser.add_argument("slug", nargs="?", help="Custom slug (1–24 alphanumeric chars)")
     parser.add_argument("--init", action="store_true", help="Configure the bac.page repo path")
     parser.add_argument("--edit", action="store_true", help="Edit existing redirects")
     parser.add_argument("--list", "-l", action="store_true", help="List all current redirects")
